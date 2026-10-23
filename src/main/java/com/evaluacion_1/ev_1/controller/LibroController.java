@@ -1,5 +1,5 @@
 package com.evaluacion_1.ev_1.controller;
-
+import com.evaluacion_1.ev_1.service.LibroEventProducer;
 import com.evaluacion_1.ev_1.model.Libro;
 import com.evaluacion_1.ev_1.repository.LibroRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +13,9 @@ import java.util.Optional;
 @RequestMapping("/api/libros")
 @CrossOrigin(origins = "*") 
 public class LibroController {
+
+    @Autowired
+    private LibroEventProducer libroEventProducer;
 
     @Autowired
     private LibroRepository libroRepository;
@@ -45,17 +48,23 @@ public class LibroController {
     @PutMapping("/{id}/prestar")
     public ResponseEntity<Libro> prestarLibro(@PathVariable Long id) {
         Optional<Libro> libroOpt = libroRepository.findById(id);
-        
-        if (libroOpt.isPresent()) {
-            Libro libro = libroOpt.get();
-            if (libro.isDisponible()) {
-                libro.setDisponible(false); 
-                return ResponseEntity.ok(libroRepository.save(libro));
-            } else {
-                return ResponseEntity.badRequest().build(); 
-            }
+
+        if (libroOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.notFound().build(); 
+
+        Libro libro = libroOpt.get();
+
+        if (!libro.isDisponible()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        libro.setDisponible(false);
+        Libro guardado = libroRepository.save(libro);
+
+        libroEventProducer.publicarPrestamo(guardado);
+
+        return ResponseEntity.ok(guardado);
     }
 
     
